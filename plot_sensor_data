@@ -1,0 +1,21 @@
+#open the vrs file
+from projectaria_tools.core import data_provider, image
+from projectaria_tools.core.stream_id import StreamId
+
+vrsfile = "Test.vrs"
+provider = data_provider.create_vrs_data_provider(vrsfile)
+
+#save image as png
+from PIL import Image
+stream_mappings = {
+    "camera-slam-left": StreamId("1201-1"),
+    "camera-slam-right": StreamId("1201-2"),
+    "camera-rgb": StreamId("214-1"),
+    "camera-eyetracking": StreamId("211-1"),
+}
+
+index = 1 # sample index (as an example)
+for [stream_name, stream_id] in stream_mappings.items():
+    image = provider.get_image_data_by_index(stream_id, index)
+    Image.fromarray(image[0].to_numpy_array()).save(f'{stream_name}.png')
+

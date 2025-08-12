@@ -1,0 +1,198 @@
+import json
+import numpy as np
+import cv2
+import matplotlib.pyplot as plt
+import torch
+from projectaria_tools.core import data_provider, mps, calibration, image
+from projectaria_tools.core.stream_id import StreamId, RecordableTypeId
+from projectaria_tools.core.sensor_data import TimeDomain, TimeQueryOptions, SensorDataType, ImageData
+from projectaria_tools.core.calibration import KANNALA_BRANDT_K3
+from projectaria_tools.core.mps import EyeGaze
+from projectaria_tools.core.mps.utils import (
+    filter_points_from_confidence,
+    get_gaze_vector_reprojection, #project an eye gaze output onto a given image and its calibration; None
+    get_nearest_eye_gaze, #for a timestamp (ns); None
+    get_nearest_pose,
+)
+from collections import defaultdict
+from PIL import Image
+
+vrsfile = 'Test2.vrs'
+provider = data_provider.create_vrs_data_provider(vrsfile)
+assert provider is not None, "File konnte nicht geöffnet werden"
+
+#Eye Tracking Cameras: Diagonal Field of View (DFOV) von 80°, 320x240 pixels: NOCHMAL PRÜFEN
+
+#Parameters für Fixationen, Sakkaden, Pupipellen, blinzelnanalysis
+SPATIAL_THRESHOLD = 15  #Pixelgröße für Fixation (Clustering) PRÜFEN
+TEMPORAL_THRESHOLD = 100  #Mindestdauer in ms für Fixation (p. 152 Oxford Eye Tracking 50-250ms)
+SACCADE_THRESHOLD = 25  #Pixelgröße für Sakkade NOCHMAL PRÜFEN (30-100° geschwidigkeit)
+MICROSACCADE_THRESHOLD = 1.5  #Microsakkade in °
+MIN_BLINZELN_DAUER = 40  #Mindestdauer in ms für blinzeln
+AGGREGATION_WINDOW = 1000  #Zeitgruppierung jede 1s = 1000ms -> macht das Sinn wg Fixationdauer liegt bei etwa 50-250ms
+
+def frame_vorbereiten(frame):    
+    equalized_frame = cv2.equalizeHist(frame)
+    blurred_frame = cv2.GaussianBlur(equalized_frame, (3, 3), 0) #prüfen ob 5x5 oder 7x7 besser passt
+    return blurred_frame
+
+#Pupillometrie
+def pupille_erkennen(frame):
+    gauss_frame = cv2.GaussianBlur(frame, (3, 3), 0)
+    thresh = cv2.adaptiveThreshold(gauss_frame, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV, 11, 2)
+    _, thresh = cv2.threshold(gauss_frame, 50, 255, cv2.THRESH_BINARY_INV) #Schwellenwert 50 PRÜFEN wegen pixelgröße
+    thresh = cv2.erode(thresh, None, iterations=2)
+    thresh = cv2.dilate(thresh, None, iterations=2)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    for contour in contours:
+        if cv2.contourArea(contour) > 100: #Flächengröße 100 pixeln PRÜFEN
+            if len(contour) >= 5:
+                ellipse = cv2.fitEllipse(contour)
+                (x, y), (lange_achse, kurze_achse), winkel = ellipse
+                pupille_diameter = (lange_achse + kurze_achse) / 2
+                return {"position": (int(x), int(y)), "diameter": pupille_diameter}
+    return None #keine Pupille wird erkannt
+
+def dilatation_konstriktion(diameter_gruppe):
+    changes = []
+    for i in range(1, len(diameter_gruppe)):
+        change = diameter_gruppe[i] - diameter_gruppe[i - 1]
+        if change > 0:
+            changes.append("dilatation")
+        elif change < 0:
+            changes.append("konstriktion")
+        else:
+            changes.append("stabil")
+    return changes
+
+def blinzeln_erkennen(diameter_gruppe, timestamps):
+    blinzeln = []
+    blinzeln_start = None
+    blinzeln_dauer = []
+
+    for i, diameter in enumerate(diameter_gruppe):
+        if diameter is None:
+            if blinzeln_start is None:
+                blinzeln_start = timestamps[i]
+        else:
+            if blinzeln_start is not None:
+                blinzeln_duration = timestamps[i] - blinzeln_start
+                if blinzeln_duration >= MIN_BLINZELN_DAUER:
+                    blinzeln.append(blinzeln_start)
+                    blinzeln_dauer.append(blinzeln_dauer)
+                blinzeln_start = None
+
+    gesamtdauer_minuten = (timestamps[-1] - timestamps[0]) / 60000
+    if gesamtdauer_minuten > 0:
+        blinzeln_rate = len(blinzeln) / gesamtdauer_minuten
+    else: 0
+    return {"blinzeln": blinzeln, "blinzeln_rate_pro_minute": blinzeln_rate, "blinzeln_dauer": blinzeln_dauer}
+
+#Fixationen
+def fixationen_erkennen(gaze_points, timestamps):
+    fixationen = []
+    current_fixation = {"points": [], "timestamps": []}
+    for i in range(1, len(gaze_points)):
+        distanz = np.linalg.norm(np.array(gaze_points[i]) - np.array(gaze_points[i - 1]))
+        zeit_diff = timestamps[i] - timestamps[i - 1]
+        if (distanz <= SPATIAL_THRESHOLD) and (zeit_diff <= TEMPORAL_THRESHOLD):
+            current_fixation["points"].append(gaze_points[i])
+            current_fixation["timestamps"].append(timestamps[i])
+        else:
+            if len(current_fixation["points"]) > 1:
+                fixation_position = np.mean(current_fixation["points"], axis=0)
+                fixation_dauer = current_fixation["timestamps"][-1] - current_fixation["timestamps"][0]
+                fixationen.append({
+                    "position": fixation_position.tolist(),
+                    "dauer": fixation_dauer
+                })
+            current_fixation = {"points": [gaze_points[i]], "timestamps": [timestamps[i]]}
+    return fixationen
+
+#Sakkaden
+def sakkade_erkennen(gaze_points, timestamps):
+    sakkaden = []
+    for i in range(1, len(gaze_points)):
+        start_point = gaze_points[i - 1]
+        end_point = gaze_points[i]
+        start_time = timestamps[i - 1]
+        end_time = timestamps[i]
+        amplitude = np.linalg.norm(np.array(end_point) - np.array(start_point))
+        dauer = end_time - start_time
+        if dauer > 0:
+            geschwindikeit = amplitude / dauer
+        else: 0
+        if amplitude <= MICROSACCADE_THRESHOLD:
+            sakkade_typ = "mikrosakkade" 
+        else: "makrosakkade"
+        if amplitude > SACCADE_THRESHOLD:
+            sakkaden.append({
+                "start": start_point,
+                "end": end_point,
+                "amplitude": amplitude,
+                "dauer": dauer,
+                "geschwindigkeit": geschwindikeit,
+                "typ": sakkade_typ
+            })
+    return sakkaden
+
+#JSON-Ausgabe
+results = []
+previous_position = None
+blinzeln_counter = 0
+frame_counter = 0
+
+#Aggregation von Metriken über 1s Zeitfenster
+aggregated_metrics = defaultdict(lambda: {
+    "pupille_diameter": [],
+    "blick_richtung": [],
+    "fixationen": [],
+    "sakkaden": [],
+    "dilatation_konstriktion": [],
+    "blinzeln": []
+})
+
+#ET cameras pair share a single image frame by concatenating horizontally.
+#muss erstmal dividiert werden -> links (1 - hälfte) ; rechts (hälfte+1 - ende)
+
+eye_stream_id = StreamId("211-1")
+eye_stream_label = provider.get_label_from_stream_id(eye_stream_id)
+eye_frame_count = provider.get_num_data(eye_stream_id)
+device_calibration = provider.get_device_calibration()
+eye_camera_calibration = device_calibration.get_aria_et_camera_calib()
+T_device_CPF = device_calibration.get_transform_device_cpf()
+
+deliver_option = provider.get_default_deliver_queued_options()
+deliver_option.deactivate_stream_all()
+deliver_option.activate_stream(eye_stream_id)
+
+#vrs path
+
+#vrs/video bearbeitung: get first & last device_time -> normalisierung fps nicht nötig: videos werden mit einer gleichen einstellung aufgenommen?
+#per 200ms (aggregation window) ein frame nehmen und weiterbearbeiten -> erstmal zusammenpacken in einer liste oder erstmal bearbeiten dann in die liste?
+#zur zweit teilen: links und rechts als zwei bilder mit eigene pixelframe betrachten -> prüfen ob das linke bild die linke Auge zeigt und auch das rechte -> rechte Auge
+
+#bild verarbeitung: einzeln für rechts und links
+#frame_width = get_width(frame)
+#frame_height = get_height(frame)
+#prüfen wegen bildmaske (vignette): löschbar?
+
+#pupillometrie
+#get_nearest_eye_gaze(timestamp in ns)
+
+
+for data in provider.deliver_queued_sensor_data(deliver_option):
+    device_time_ns = data.get_time_ns(TimeDomain.DEVICE_TIME) #in ns -> soll in us oder ms umgewandelt werden? IN MS
+    if data.sensor_data_type() == SensorDataType.IMAGE:
+        frame_height = data.get_height()
+        frame_width = data.get_width()
+        #frame_left = data[:, :frame_width // 2]
+        #frame_right = data[:, frame_width // 2:]
+        frame = data.image_data_and_record()[0].to_numpy_array()
+        frame_left = frame[..., :frame_width // 2]
+        frame_right = frame[..., frame_width // 2:]
+        frame_left_vorbereitet = frame_vorbereiten(frame_left)
+        frame_right_vorbereitet = frame_vorbereiten(frame_right)
+        pupille_left = pupille_erkennen(frame_left_vorbereitet)
+        pupille_right = pupille_erkennen(frame_right_vorbereitet)

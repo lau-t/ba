@@ -1,0 +1,12 @@
+#open a VSR file
+from projectaria_tools.core import data_provider
+from projectaria_tools.core.sensor_data import TimeDomain, TimeQueryOptions
+from projectaria_tools.core.stream_id import RecordableTypeId, StreamId
+
+vrsfile = "Test3.vrs"
+provider = data_provider.create_vrs_data_provider(vrsfile)
+assert provider is not None, "Cannot open file"
+
+#deliver all sensor data in VRS
+for data in provider.deliver_queued_sensor_data():
+  print(data.get_time_ns(TimeDomain.DEVICE_TIME))
