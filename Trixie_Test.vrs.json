@@ -1,0 +1,93 @@
+{
+    "campaign": null,
+    "cohort": "external_academic",
+    "companion_version": "175.0",
+    "data_quality_stats": {
+        "audio": {
+            "dropped": 0,
+            "expected": 970752,
+            "processed": 970752,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "barometer": {
+            "dropped": 0,
+            "expected": 1015,
+            "processed": 1015,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "camera_timestamp_drop_scores": {
+            "et": 0,
+            "rgb": 0
+        },
+        "et_camera": {
+            "dropped": 0,
+            "expected": 1831,
+            "processed": 1831,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "imu_1": {
+            "dropped": 0,
+            "expected": 20360,
+            "processed": 20360,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "imu_2": {
+            "dropped": 0,
+            "expected": 16417,
+            "processed": 16417,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "magnetometer": {
+            "dropped": 0,
+            "expected": 201,
+            "processed": 201,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "rgb_camera": {
+            "dropped": 0,
+            "expected": 203,
+            "processed": 203,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "sensor_misalignment": {}
+    },
+    "device_id": "6b105bcd-9a2e-4169-814d-12237a07f7d7",
+    "device_test_automation_enabled": false,
+    "device_version": "49702050008900070",
+    "encryption_enabled": false,
+    "end_time": 1724421743,
+    "file_size": 191682224,
+    "filename": "Trixie_Test.vrs",
+    "firmware_version": "3.32.1",
+    "hash_ca_id": "LTIyMTcwMTY0Ng==",
+    "is_vio_preprocessing_enabled": false,
+    "name": "Trixie Test",
+    "needs_anonymization": false,
+    "notes": "",
+    "ntp_server_hostname": "",
+    "ntp_time_enabled": false,
+    "recording_profile": "profile16",
+    "start_time": 1724421723,
+    "telemetry_id": "7a63f6ad-319c-4d71-9722-50014d3781d6",
+    "ticsync_enabled": false,
+    "timecode_enabled": false,
+    "timecode_trigger_enabled": false,
+    "type": "real-recording",
+    "vio_data_saving_enabled": false,
+    "vio_enabled": false,
+    "vio_setup_mode": "Temple2"
+}

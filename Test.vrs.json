@@ -1,0 +1,93 @@
+{
+    "campaign": null,
+    "cohort": "external_academic",
+    "companion_version": "175.0",
+    "data_quality_stats": {
+        "audio": {
+            "dropped": 0,
+            "expected": 1157120,
+            "processed": 1157120,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 2
+        },
+        "barometer": {
+            "dropped": 0,
+            "expected": 1216,
+            "processed": 1216,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "camera_timestamp_drop_scores": {
+            "et": 0,
+            "rgb": 0
+        },
+        "et_camera": {
+            "dropped": 0,
+            "expected": 2184,
+            "processed": 2184,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "imu_1": {
+            "dropped": 0,
+            "expected": 24291,
+            "processed": 24291,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "imu_2": {
+            "dropped": 0,
+            "expected": 19587,
+            "processed": 19587,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "magnetometer": {
+            "dropped": 0,
+            "expected": 239,
+            "processed": 239,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "rgb_camera": {
+            "dropped": 0,
+            "expected": 242,
+            "processed": 242,
+            "score": 100,
+            "sequential_drops": {},
+            "time_error": 0
+        },
+        "sensor_misalignment": {}
+    },
+    "device_id": "6b105bcd-9a2e-4169-814d-12237a07f7d7",
+    "device_test_automation_enabled": false,
+    "device_version": "49702050008900070",
+    "encryption_enabled": false,
+    "end_time": 1722986164,
+    "file_size": 226397749,
+    "filename": "Test.vrs",
+    "firmware_version": "3.32.1",
+    "hash_ca_id": "LTIyMTcwMTY0Ng==",
+    "is_vio_preprocessing_enabled": false,
+    "name": "Test",
+    "needs_anonymization": false,
+    "notes": "",
+    "ntp_server_hostname": "",
+    "ntp_time_enabled": false,
+    "recording_profile": "profile16",
+    "start_time": 1722986140,
+    "telemetry_id": "4f53916b-9433-4c5f-baf1-23050b518e19",
+    "ticsync_enabled": false,
+    "timecode_enabled": false,
+    "timecode_trigger_enabled": false,
+    "type": "real-recording",
+    "vio_data_saving_enabled": false,
+    "vio_enabled": false,
+    "vio_setup_mode": "Temple2"
+}
